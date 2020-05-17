@@ -21,14 +21,7 @@ module.exports = {
         const config = {
             dynamodbConfig: {
                 awsRegion: 'us-east-2',
-                tableName,
-                // deltaSyncConfig: {
-                //     baseTableTTL: 'NUMBER_VALUE',
-                //     deltaSyncTableName: 'STRING_VALUE',
-                //     deltaSyncTableTTL: 'NUMBER_VALUE'
-                // },
-                // useCallerCredentials: true || false,
-                // versioned: true || false
+                tableName
             },
         }
 

@@ -6,7 +6,7 @@ const appsyncResolver = require('./src/actions/resolver')
 const iam = require('gj-aws-iam')
 const utils = require('./src/utils')
 
-const original = async ({ instructions }) => {
+const originalLogic = async ({ instructions }) => {
     let appsyncMonoLambdaDatasourceName = instructions.projectInfo.name.split(' ').join('') + 'lambdadatasource'
 
 
@@ -184,7 +184,7 @@ module.exports = async (instructions) => {
     apiId = graphQLApiResponse.data.apiId
     apiName = graphQLApiResponse.data.name
     apiEndpoint = graphQLApiResponse.data.endpoint
-        // apiName = graphQLApiResponse.data.name
+  
  
      /**
      * API Key

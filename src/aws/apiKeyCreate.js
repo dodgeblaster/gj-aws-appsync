@@ -1,4 +1,3 @@
-
 const AWS = require('aws-sdk')
 const appsync = new AWS.AppSync({
     region: 'us-east-2'

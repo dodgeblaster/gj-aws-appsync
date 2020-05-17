@@ -5,12 +5,11 @@ const appsync = new AWS.AppSync({
 
 /**
  * Note:
- * This file is mimicking the file found in the existing appsync comp
+ * This file is taken from the file found in the existing appsync comp.
+ * TODO: refactor this file
  * 
  */
-
 const sleep = async (wait) => new Promise((resolve) => setTimeout(() => resolve(), wait))
-
 const waitTillSchemaIsDone = (id) => {
     return new Promise(async (res) => {
         let waiting = true
@@ -37,9 +36,7 @@ module.exports = async (id, schema) => {
             })
             .promise()
 
-
         await waitTillSchemaIsDone(id)
-
         return {
             status: 'SUCCESS',
             data: result
