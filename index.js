@@ -4,177 +4,28 @@ const appsyncSchema = require('./src/actions/schema')
 const appsyncDatasource = require('./src/actions/datasource')
 const appsyncResolver = require('./src/actions/resolver')
 const iam = require('gj-aws-iam')
-const utils = require('./src/utils')
-
-const originalLogic = async ({ instructions }) => {
-    let appsyncMonoLambdaDatasourceName = instructions.projectInfo.name.split(' ').join('') + 'lambdadatasource'
 
 
-
-    /**
-     * GraphQL API
-     * 
-     * This creates the graphql appsync app. Everything past this point
-     * adds on to this base resource
-     * 
-     */
-
-    let apiId = ''
-    let apiName = ''
-    if (instructions.graphQLApi.rootResource === 'CREATE') {
-        const graphQLApiResponse = await appsyncApi.createGraphQLApi(instructions.projectInfo.name)
-        apiId = graphQLApiResponse.data.apiId
-        apiName = graphQLApiResponse.data.name
-    }
-
-    if (instructions.graphQLApi.rootResource === 'UPDATE') {
-        apiId = instructions.projectInfo.id
-        apiName = instructions.projectInfo.name
-    }
-
-    if (instructions.graphQLApi.rootResource === 'SKIP') {
-        apiId = instructions.projectInfo.id
-        apiName = instructions.projectInfo.name
-    }
-
-
-
-    /**
-     * API Key
-     * 
-     * Appsync requires that some sort of authorization be defined.
-     * For now we are defaulting to API Key, and generating one here
-     * 
-     */
-    if (instructions.auth === 'CREATE') {
-        await appsyncApiKey.createApiKey(apiId)
-    }
-
-
-
-
-    /**
-     * Schema
-     * 
-     * Each type in the schema.graphl needs to be defined as a type
-     * resource in appsync. For now we are just spliting the file string
-     * by type, looping through it, and calling the createType sdk call
-     * 
-     */
-
-    let schemaChecksum = ''
-    if (instructions.schema === 'CREATE') {
-        await appsyncSchema.createSchema(apiId, instructions.projectInfo.schema, '')
-        schemaChecksum = utils.checksum(schema)
-    }
-
-    if (instructions.schema === 'UPDATE') {
-        // TODO: add update action
-        schemaChecksum = instructions.projectInfo.schemaChecksum
-    }
-
-    if (instructions.schema === 'SKIP') {
-        schemaChecksum = instructions.projectInfo.schemaChecksum
-    }
-
-
-
-
-    /**
-     * Datasource
-     * 
-     * Each Query and Mutation type will have a cooresponding datastore.
-     * currently, we are not looping over the schema, but just creating
-     * one, using an already existing lambda arn
-     * 
-     */
-
-    let createdLambdaDatasourceRole = instructions.projectInfo.lambdaDatasourceRole || ''
-    for (const datasourceIamRole of instructions.datasourceIamRoles) {
-        if (datasourceIamRole.type === 'AWS_LAMBDA') {
-            await iam.createRoleForLambdaDatasource({
-                state: datasourceIamRole.state,
-                name: datasourceIamRole.name
-            })
-            createdLambdaDatasourceRole = datasourceIamRole.name
-        }
-
-        if (datasourceIamRole.type === 'AMAZON_DYNAMODB') {
-            await iam.createRoleForDynamoDbDatasource({
-                state: datasourceIamRole.state,
-                name: datasourceIamRole.name
-            })
-            createdLambdaDatasourceRole = datasourceIamRole.name
-        }
-    }
-
-    for (const datasource of instructions.datasources) {
-        if (datasource.type === 'AWS_LAMBDA') {
-            appsyncMonoLambdaDatasourceName = datasource.name
-            await appsyncDatasource.createLambdaDataSource({
-                id: apiId,
-                name: datasource.name,
-                lambdaArn: datasource.lambdaArn,
-                roleArn: datasource.roleArn
-            })
-        }
-
-        if (datasource.type === 'AMAZON_DYNAMODB') {
-            await appsyncDatasource.createDynamoDbDataSource({
-                id: apiId,
-                name: datasource.name,
-                lambdaArn: datasource.lambdaArn,
-                roleArn: datasource.roleArn,
-                tableName: datasource.tableName
-            })
-        }
-    }
-
-
-    /**
-     * Resolver
-     * 
-     * Each Datastore defined above needs to be connected to a type. This
-     * is what the resolver is facilitating
-     * 
-     */
-    for (const resolver of instructions.resolvers) {
-        if (resolver.resolverType === 'FUNCTION') {
-            await appsyncResolver.createMonoLambdaResolver({
-                id: apiId,
-                datasource: resolver.datasource,
-                type: resolver.type,
-                field: resolver.field
-            })
-        }
-
-        if (resolver.resolverType === 'AMAZON_DYNAMODB') {
-            await appsyncResolver.createDynamoDbResolver({
-                id: apiId,
-                datasource: resolver.datasource,
-                type: resolver.type,
-                field: resolver.field,
-                action: resolver.action
-            })
-        }
-    }
-
-    return {
-        apiId,
-        apiName,
-        schemaChecksum,
-        lambdaDatasourceRole: createdLambdaDatasourceRole
-    }
+const awaitPromises = list => {
+    return Promise.all(list.map(x => x()))
 }
-
-
 
 module.exports = async (instructions) => {
     /**
      * GraphQL API
      * 
      * This creates the graphql appsync app. Everything past this point
-     * adds on to this base resource
+     * adds on to this base resource. When creating, it first checks if
+     * it exists, if it does, it will return existing info rather than
+     * creating a new one
+     * 
+     * TODO: make a config to determine whether to attempt create or just
+     * return alreadyExisting info store in state.
+     * 
+     * QUESTION: should thinking about state not be a concern at all
+     * when building this component? We wouldnt have to if we just try
+     * to create everythign all the time, if it exists, switch to updating
+     * but that means makes updates are inefficient
      * 
      */
     let apiId
@@ -186,6 +37,7 @@ module.exports = async (instructions) => {
     apiEndpoint = graphQLApiResponse.data.endpoint
   
  
+
      /**
      * API Key
      * 
@@ -193,65 +45,80 @@ module.exports = async (instructions) => {
      * For now we are defaulting to API Key, and generating one here
      * 
      */
-    // if (instructions.auth === 'CREATE') {
+    let key
+    if (instructions.auth.state === 'CREATE') {
         const k = await appsyncApiKey.createApiKey(apiId)
-    // }
-        const key = k.data.apiKey.id
+        key = k.data.apiKey.id
+    } else {
+        key = instructions.auth.existingKey
+    }
 
 
 
     /**
      * Schema
      * 
-     * Each type in the schema.graphl needs to be defined as a type
-     * resource in appsync. For now we are just spliting the file string
-     * by type, looping through it, and calling the createType sdk call
+     * Each type in the schema.graphl will be dfined with the 
+     * createSchema sdk call. If this function is called and the
+     * schema already exists, it will update the schema.
+     *
+     */
+    if (instructions.schema.state === 'CREATE' || instructions.schema.state === 'UPDATE') {
+        await appsyncSchema.createSchema(apiId, instructions.schema.defintion, '')
+    }
+
+
+
+    /**
+     * Datasource IAM
+     * 
+     * Each Datasource needs an IAM role, before creating datasources, we will
+     * create a promiselist of all roles to be created and create them all at once
      * 
      */
+    let dsIamPromiseList = []
+    for (const datasourceIamRole of instructions.datasourceIamRoles.create) {
+        if (datasourceIamRole.type === 'AWS_LAMBDA') {
+            dsIamPromiseList.push(async () => {
+                return await iam.createRoleForLambdaDatasource({
+                    state: datasourceIamRole.state,
+                    name: datasourceIamRole.name
+                })
+            })
+        }
 
-    // let schemaChecksum = ''
-    // if (instructions.schema === 'CREATE') {
-        await appsyncSchema.createSchema(apiId, instructions.schema, '')
-        // schemaChecksum = utils.checksum(schema)
-    // }
+        if (datasourceIamRole.type === 'AMAZON_DYNAMODB') {
+            dsIamPromiseList.push(async () => {
+                return await iam.createRoleForDynamoDbDatasource({
+                    state: datasourceIamRole.state,
+                    name: datasourceIamRole.name
+                })
+            })
+        }
+    }
+    await awaitPromises(dsIamPromiseList)
+    
 
 
     /**
      * Datasource
      * 
      * Each Query and Mutation type will have a cooresponding datastore.
-     * currently, we are not looping over the schema, but just creating
-     * one, using an already existing lambda arn
+     * After all datasource Iam roles are created, we create a promise
+     * list of all datasources that need to be created and create them 
+     * all at once
      * 
      */
-
-    // let createdLambdaDatasourceRole = instructions.projectInfo.lambdaDatasourceRole || ''
-    for (const datasourceIamRole of instructions.datasourceIamRoles) {
-        if (datasourceIamRole.type === 'AWS_LAMBDA') {
-            await iam.createRoleForLambdaDatasource({
-                state: datasourceIamRole.state,
-                name: datasourceIamRole.name
-            })
-            // createdLambdaDatasourceRole = datasourceIamRole.name
-        }
-
-        if (datasourceIamRole.type === 'AMAZON_DYNAMODB') {
-            await iam.createRoleForDynamoDbDatasource({
-                state: datasourceIamRole.state,
-                name: datasourceIamRole.name
-            })
-            // createdLambdaDatasourceRole = datasourceIamRole.name
-        }
-    }
-
-    for (const datasource of instructions.datasources) {
+    let dsPromiseList = []
+    for (const datasource of instructions.datasources.create) {
         if (datasource.type === 'AWS_LAMBDA') {
-            // appsyncMonoLambdaDatasourceName = datasource.name
-            await appsyncDatasource.createLambdaDataSource({
-                id: apiId,
-                name: datasource.name,
-                lambdaArn: datasource.lambdaArn,
-                roleArn: datasource.roleArn
+            dsPromiseList.push(async () => {
+                await appsyncDatasource.createLambdaDataSource({
+                    id: apiId,
+                    name: datasource.name,
+                    lambdaArn: datasource.lambdaArn,
+                    roleArn: datasource.roleArn
+                })
             })
         }
 
@@ -265,36 +132,55 @@ module.exports = async (instructions) => {
             })
         }
     }
+    await awaitPromises(dsPromiseList)
+
 
 
     /**
      * Resolver
      * 
-     * Each Datastore defined above needs to be connected to a type. This
-     * is what the resolver is facilitating
+     * Each Resolver needs to connect a type to a datasource. Here
+     * we create a list of promises to create resolvers, and create
+     * them all at once
      * 
      */
-    for (const resolver of instructions.resolvers) {
-        if (resolver.resolverType === 'FUNCTION') {
-            await appsyncResolver.createMonoLambdaResolver({
-                id: apiId,
-                datasource: resolver.datasource,
-                type: resolver.type,
-                field: resolver.field
+    let resolverPromiseList = []
+    for (const resolver of instructions.resolvers.create) {
+        if (resolver.resolverType === 'AWS_LAMBDA') {
+            resolverPromiseList.push(async () => {
+                await appsyncResolver.createMonoLambdaResolver({
+                    id: apiId,
+                    datasource: resolver.datasource,
+                    type: resolver.type,
+                    field: resolver.field,
+                    vtl: resolver.vtl
+                })
             })
         }
 
         if (resolver.resolverType === 'AMAZON_DYNAMODB') {
-            await appsyncResolver.createDynamoDbResolver({
-                id: apiId,
-                datasource: resolver.datasource,
-                type: resolver.type,
-                field: resolver.field,
-                action: resolver.action
+            resolverPromiseList.push(async () => {
+                await appsyncResolver.createDynamoDbResolver({
+                    id: apiId,
+                    datasource: resolver.datasource,
+                    type: resolver.type,
+                    field: resolver.field,
+                    vtl: resolver.vtl
+                })
             })
         }
     }
+    await awaitPromises(resolverPromiseList)
 
+
+
+    /**
+     * Output
+     * 
+     * Each time we run this function, we will return
+     * the following:
+     * 
+     */
     return {
         apiId,
         keyId: key,

@@ -20,6 +20,21 @@ module.exports = async ({ id, name, config, type, roleArn }) => {
             state: 'SUCCESS'
         }
     } catch (e) {
+        /**
+         * Swallowing the create error if its saying, this already exists
+         */
+        if (e.message.includes(`Data source with name ${name} already exists`)) {
+            console.log('STATUS - ', `Datasource with name ${name} already exists`)
+            return {
+                state: 'ERROR'
+            }
+        }
+        /**
+         * Currently swallowing all errors... need to think about how to handle
+         * every resource created prior to this call if there is an error.
+         *  - somehow reverse all previuosly created / updated resources
+         *  - just throw the error and leave previously created / updated resources as is
+         */
         console.log('DATASTORE ERRR - ', e)
         return {
             state: 'ERROR'

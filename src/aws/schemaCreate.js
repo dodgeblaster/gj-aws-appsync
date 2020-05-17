@@ -14,8 +14,8 @@ const waitTillSchemaIsDone = (id) => {
     return new Promise(async (res) => {
         let waiting = true
         do {
-            const { status } = await appsync.getSchemaCreationStatus({ apiId: id }).promise()
-            const isDone = ['FAILED', 'SUCCESS', 'NOT_APPLICABLE'].includes(status)
+            const res = await appsync.getSchemaCreationStatus({ apiId: id }).promise()
+            const isDone = ['FAILED', 'SUCCESS', 'NOT_APPLICABLE'].includes(res.status)
             // TODO: shouldnt we be failing id the status is something other than success?
             if (isDone) {
                 waiting = false
