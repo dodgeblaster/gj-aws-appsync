@@ -1,5 +1,5 @@
-const create = require('../../actions/appsyncSchemaCreate')
-const utils = require('../../utils')
+const create = require('../aws/schemaCreate')
+const utils = require('../utils')
 
 module.exports = {
     createSchema: async (id, newSchema, oldChecksum = '') => {

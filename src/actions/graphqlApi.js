@@ -1,6 +1,6 @@
-const create = require('../../actions/appsyncGraphqlApiCreate')
-const list = require('../../actions/appsyncGraphqlApiList')
-const remove = require('../../actions/appsyncGraphqlApiRemove')
+const create = require('../aws/graphqlApiCreate')
+const list = require('../aws/graphqlApiList')
+const remove = require('../aws/graphqlApiRemove')
 
 module.exports = {
     createGraphQLApi: async name => {

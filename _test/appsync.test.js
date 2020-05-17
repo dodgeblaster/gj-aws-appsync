@@ -1,7 +1,7 @@
 const appsync = require('../index')
 const fetch = require('node-fetch')
 const iam = require('gj-aws-iam')
-const api = require('../src/appsync/graphqlApi/logic')
+const api = require('../src/actions/graphqlApi')
 const ACCOUNT_ID = '251256923172'
 const retry = require('async-retry')
 
@@ -133,7 +133,7 @@ describe('appsync', () => {
             console.log('+++ ', cResult)
             expect(cResult.data.getHello.id).toBe('1234')
         }, {
-            retries: 3
+            retries: 4
         })
       
 

@@ -1,4 +1,4 @@
-const create = require('../../actions/appsyncDatasourceCreate')
+const create = require('../aws/datasourceCreate')
 
 module.exports = {
     createLambdaDataSource: async ({ id, name, roleArn, lambdaArn }) => {

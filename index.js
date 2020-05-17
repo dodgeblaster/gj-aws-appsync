@@ -1,8 +1,8 @@
-const appsyncApi = require('./src/appsync/graphqlApi/logic')
-const appsyncApiKey = require('./src/appsync/apiKey/logic')
-const appsyncSchema = require('./src/appsync/schema/logic')
-const appsyncDatasource = require('./src/appsync/datasource/logic')
-const appsyncResolver = require('./src/appsync/resolver/logic')
+const appsyncApi = require('./src/actions/graphqlApi')
+const appsyncApiKey = require('./src/actions/apiKey')
+const appsyncSchema = require('./src/actions/schema')
+const appsyncDatasource = require('./src/actions/datasource')
+const appsyncResolver = require('./src/actions/resolver')
 const iam = require('gj-aws-iam')
 const utils = require('./src/utils')
 
