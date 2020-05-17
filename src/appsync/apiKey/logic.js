@@ -1,4 +1,4 @@
-const createApiKey = require('../../../io/aws/appsynApiKeyCreate')
+const createApiKey = require('../../actions/appsynApiKeyCreate')
 
 module.exports = {
     createApiKey

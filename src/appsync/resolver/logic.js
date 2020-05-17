@@ -1,4 +1,4 @@
-const create = require('../../../io/aws/appsyncResolverCreate')
+const create = require('../../actions/appsyncResolverCreate')
 
 module.exports = {
     createMonoLambdaResolver: async ({ id, datasource, type, field }) => {

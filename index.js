@@ -1,12 +1,12 @@
-const appsyncApi = require('../../actions/appsync/graphqlApi/logic')
-const appsyncApiKey = require('../../actions/appsync/apiKey/logic')
-const appsyncSchema = require('../../actions/appsync/schema/logic')
-const appsyncDatasource = require('../../actions/appsync/datasource/logic')
-const appsyncResolver = require('../../actions/appsync/resolver/logic')
-const iam = require('../../actions/iam/logic')
-const utils = require('./utils')
+const appsyncApi = require('./src/appsync/graphqlApi/logic')
+const appsyncApiKey = require('./src/appsync/apiKey/logic')
+const appsyncSchema = require('./src/appsync/schema/logic')
+const appsyncDatasource = require('./src/appsync/datasource/logic')
+const appsyncResolver = require('./src/appsync/resolver/logic')
+const iam = require('gj-aws-iam')
+const utils = require('./src/utils')
 
-module.exports = async ({ instructions }) => {
+const original = async ({ instructions }) => {
     let appsyncMonoLambdaDatasourceName = instructions.projectInfo.name.split(' ').join('') + 'lambdadatasource'
 
 
@@ -164,5 +164,141 @@ module.exports = async ({ instructions }) => {
         apiName,
         schemaChecksum,
         lambdaDatasourceRole: createdLambdaDatasourceRole
+    }
+}
+
+
+
+module.exports = async (instructions) => {
+    /**
+     * GraphQL API
+     * 
+     * This creates the graphql appsync app. Everything past this point
+     * adds on to this base resource
+     * 
+     */
+    let apiId
+    let apiName
+    let apiEndpoint
+    const graphQLApiResponse = await appsyncApi.createGraphQLApi(instructions.name)
+    apiId = graphQLApiResponse.data.apiId
+    apiName = graphQLApiResponse.data.name
+    apiEndpoint = graphQLApiResponse.data.endpoint
+        // apiName = graphQLApiResponse.data.name
+ 
+     /**
+     * API Key
+     * 
+     * Appsync requires that some sort of authorization be defined.
+     * For now we are defaulting to API Key, and generating one here
+     * 
+     */
+    // if (instructions.auth === 'CREATE') {
+        const k = await appsyncApiKey.createApiKey(apiId)
+    // }
+        const key = k.data.apiKey.id
+
+
+
+    /**
+     * Schema
+     * 
+     * Each type in the schema.graphl needs to be defined as a type
+     * resource in appsync. For now we are just spliting the file string
+     * by type, looping through it, and calling the createType sdk call
+     * 
+     */
+
+    // let schemaChecksum = ''
+    // if (instructions.schema === 'CREATE') {
+        await appsyncSchema.createSchema(apiId, instructions.schema, '')
+        // schemaChecksum = utils.checksum(schema)
+    // }
+
+
+    /**
+     * Datasource
+     * 
+     * Each Query and Mutation type will have a cooresponding datastore.
+     * currently, we are not looping over the schema, but just creating
+     * one, using an already existing lambda arn
+     * 
+     */
+
+    // let createdLambdaDatasourceRole = instructions.projectInfo.lambdaDatasourceRole || ''
+    for (const datasourceIamRole of instructions.datasourceIamRoles) {
+        if (datasourceIamRole.type === 'AWS_LAMBDA') {
+            await iam.createRoleForLambdaDatasource({
+                state: datasourceIamRole.state,
+                name: datasourceIamRole.name
+            })
+            // createdLambdaDatasourceRole = datasourceIamRole.name
+        }
+
+        if (datasourceIamRole.type === 'AMAZON_DYNAMODB') {
+            await iam.createRoleForDynamoDbDatasource({
+                state: datasourceIamRole.state,
+                name: datasourceIamRole.name
+            })
+            // createdLambdaDatasourceRole = datasourceIamRole.name
+        }
+    }
+
+    for (const datasource of instructions.datasources) {
+        if (datasource.type === 'AWS_LAMBDA') {
+            // appsyncMonoLambdaDatasourceName = datasource.name
+            await appsyncDatasource.createLambdaDataSource({
+                id: apiId,
+                name: datasource.name,
+                lambdaArn: datasource.lambdaArn,
+                roleArn: datasource.roleArn
+            })
+        }
+
+        if (datasource.type === 'AMAZON_DYNAMODB') {
+            await appsyncDatasource.createDynamoDbDataSource({
+                id: apiId,
+                name: datasource.name,
+                lambdaArn: datasource.lambdaArn,
+                roleArn: datasource.roleArn,
+                tableName: datasource.tableName
+            })
+        }
+    }
+
+
+    /**
+     * Resolver
+     * 
+     * Each Datastore defined above needs to be connected to a type. This
+     * is what the resolver is facilitating
+     * 
+     */
+    for (const resolver of instructions.resolvers) {
+        if (resolver.resolverType === 'FUNCTION') {
+            await appsyncResolver.createMonoLambdaResolver({
+                id: apiId,
+                datasource: resolver.datasource,
+                type: resolver.type,
+                field: resolver.field
+            })
+        }
+
+        if (resolver.resolverType === 'AMAZON_DYNAMODB') {
+            await appsyncResolver.createDynamoDbResolver({
+                id: apiId,
+                datasource: resolver.datasource,
+                type: resolver.type,
+                field: resolver.field,
+                action: resolver.action
+            })
+        }
+    }
+
+    return {
+        apiId,
+        keyId: key,
+        apiName,
+        apiEndpoint
     }
 }
