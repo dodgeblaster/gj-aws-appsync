@@ -145,7 +145,7 @@ describe('appsync', () => {
             }
         }
         
-        const result = await appsync(instructions)
+        const result = await appsync.deploy(instructions)
         console.timeEnd('LONG IT TAKES')
 
         // * * * * * * * * * * * * * * * * * * * * * * * * 
@@ -184,7 +184,7 @@ describe('appsync', () => {
         // * * * * * * * * * * * * * * * * * * * * * * * *        
         await iam.removeRole(testLambdaRoleName)
         await iam.removeRole(testDynamoDbRoleName)
-        await api.removeGraphQLApi(result.apiId)
+        await appsync.remove(result.apiId)
         
         done()
     }, 300000)

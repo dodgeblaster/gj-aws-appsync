@@ -6,11 +6,12 @@ const appsyncResolver = require('./src/actions/resolver')
 const iam = require('gj-aws-iam')
 
 
+
 const awaitPromises = list => {
     return Promise.all(list.map(x => x()))
 }
 
-module.exports = async (instructions) => {
+module.exports.deploy = async (instructions) => {
     /**
      * GraphQL API
      * 
@@ -187,4 +188,9 @@ module.exports = async (instructions) => {
         apiName,
         apiEndpoint
     }
+}
+
+
+module.exports.remove = async (id) => {
+    await appsyncApi.removeGraphQLApi(id)
 }
